@@ -1,31 +1,13 @@
 from jira import JIRA
 from jira.resources import Issue
-from repositories import constant
+
 from core import config
 from datetime import datetime
 import time
 from celery import Celery
-import json
-appcelery = Celery('savedata', backend='rpc://', broker='amqp://guest@localhost//')
-appcelery.conf.timezone = 'UTC'
-
-
-@appcelery.on_after_configure.connect
-def setup_periodic_tasks(sender, **kwargs):
-    # Calls test('hello') every 10 seconds.
-    sender.add_periodic_task(30.0, save_data.save_issue.s(), name='add every 10')
-
-    # Calls test('world') every 30 seconds
-    # sender.add_periodic_task(30.0, save_data.save_issue.s(), expires=10)
-
-
-def test(arg):
-    for i in range(1000):
-        print(str(i) + arg)
-
-
 class BFIssue(Issue):
     def __reinit__(self) -> None:
+        print("Issue",Issue)
         self.assignee = self.fields.assignee.name
         self.task_id = self.key
         self.summary = self.fields.summary
@@ -39,15 +21,14 @@ class BFIssue(Issue):
         self.spend_day = int(self.fields.customfield_10707) if self.fields.customfield_10707 else None
         self.status = self.fields.status.name
         self.deadline_rate = self.deadline_rate()
-        self.link = "{}/browse/{}".format(config.JIRA_URL, self.key)
+        # self.rank = None
+        # self.point = None
         self.PATTERN_DATETIME = "%Y-%m-%d"
         self.STATUS_DONE = "Done"
-
     def to_dict(self) -> dict:
         return {
             "assignee": self.assignee,
             "task_id": self.task_id,
-            "link": self.link,
             "summary": self.summary,
             "type": self.type,
             "category": self.category,
@@ -93,7 +74,6 @@ class BFIssue(Issue):
             else:
                 return 'early'
 
-
 class JiraClient(object):
     def __init__(self, url: str, jira_admin: str, jira_token: str) -> None:
         self.url = url
@@ -130,7 +110,9 @@ class JiraClient(object):
         return start_str, end_str
 
 
-class save_data():
+class save_data:
+    appcelery = Celery("task", backend='rpc://', broker='amqp://guest@localhost//', CELERY_TIMEZONE="America/New_York")
+    appcelery.conf.beat_schedule = {}
 
     def __init__(self, moth):
         self.J = JiraClient(
@@ -141,61 +123,37 @@ class save_data():
         self.J.connect()
         print("connected")
         self.start_str, self.end_str = self.J.time_query_str(moth)
-        self.list_members = constant.MEMBERS.keys()
-        self.username = ''
-        self.save_issue()
-
+        # username = "toantruongvan",
+        startss = time.time()
+        print("start", startss)
 
     def __query_isjsues(self, jql_str: str) -> list:
         return self.J.search_issues(jql_str=jql_str)
 
     def assigned_issues(self) -> list:
+        print("self.username", self.username, self.start_str, self.end_str)
         jql_str = "assignee = {} AND duedate >= {} AND duedate <= {} and type in (Epic,Sub-task,Task,'New Feature') and status not in ('In Review', 'Reject') ORDER BY assignee DESC".format(
             self.username, self.start_str, self.end_str)
+        print("self.__query_isjsues(jql_str=jql_str)", self.__query_isjsues(jql_str=jql_str))
         return self.__query_isjsues(jql_str=jql_str)
 
     def support_issues(self) -> list:
         jql_str = "'BFP_Người hỗ trợ' = {}  AND duedate >= {} AND duedate <= {} and type in (Epic,Sub-task,Task,'New Feature') and status not in ('In Review', 'Reject') ORDER BY assignee DESC".format(
             self.username, self.start_str, self.end_str)
+        print("supporttttt", self.__query_isjsues(jql_str=jql_str))
         return self.__query_isjsues(jql_str=jql_str)
 
-    def convert_issue(self, issue: Issue) -> BFIssue:
-        issue.__class__ = BFIssue
-        issue.__reinit__()
-        return issue.to_dict()
+    @appcelery.on_after_configure.connect
+    def schedule__task(self,sender, **kwargs):
+        sender.add_periodic_task(10.0,)
 
-    # @appcelery.task
+
+    @appcelery.task
     def save_issue(self):
-        print("aaaaaaaa")
         curDT = datetime.now()
-        path = r'../repositories/'
         namefile = curDT.strftime("%Y_%m")
-        f = open(path + namefile + ".json", "w")
-        data_save = {}
-
-        for k in self.list_members:
-            self.username = k
-            total_issue = {}
-            list_issue = []
-            for i in self.assigned_issues():
-                i = self.convert_issue(i)
-                list_issue.append(i)
-            list_support_issue = []
-            for j in self.support_issues():
-                j = self.convert_issue(j)
-                list_support_issue.append(j)
-            total_issue["support_issue"] = self.support_issues()
-            data_save["{}".format(self.username)] = {"list_issue": list_issue,
-                                                     "list_support_issue": list_support_issue,
-
-                                                     }
-            print(self.username, data_save["{}".format(self.username)])
-            json_object = json.dumps(data_save)
-
-
-        print("data_save", str(data_save))
-        f.writelines(json_object)
-
-
-if __name__ == "__main__":
-    save_data('2022-09')
+        total_issue = {}
+        total_issue["assign_issue"] = self.assigned_issues()
+        total_issue["support_issue"] = self.support_issues()
+        f = open(namefile + ".json", "w")
+        f.writelines(total_issue)

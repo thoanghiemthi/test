@@ -5,22 +5,21 @@ from core.domain.model import (Issue, Score, Member)
 import json
 from jira.resources import Issue
 from core import config
-import os
+
+f = open('/home/thoa/PycharmProjects/scoring_hexagonal/issuseTable.json')
+data = json.load(f)
+data = data["issueTable"]
+data = data['table']
+print("data", data)
+
 
 class GetIssue(Member):
     def __init__(self, username: str, month: str = None) -> None:
         super().__init__(username, month)
-        curDT = datetime.now()
-        path = r'../repositories/'
-
-        if not month:
-            namefile = curDT.strftime("%Y_%m")
-        else:
-            _year, _month = month.split("-")
-            namefile = _year + '_' + _month
-        # os.chdir(r'C:\Folder')
-        f = open(r"/home/thoa/PycharmProjects/scoring_hexagon/repositories/2022_09.json", "r")
+        f = open('/home/thoa/PycharmProjects/scoring_hexagonal/issuseTable.json')
         self.data = json.load(f)
+        self.data = self.data["issueTable"]
+        self.data = self.data['table']
         print("data", self.data)
 
     def __parse_datetime(self, date) -> datetime:
@@ -58,26 +57,32 @@ class GetIssue(Member):
     def covertdata(self, issue):
         list_issue = []
         for i in issue:
+            duedate = self.__parse_datetime(i["duedate"])
+            startdate = self.__parse_datetime(i["startdate"])
+            finishdate = self.__parse_datetime(i["finishdate"])
+            status = i["status"]
+            spendday = i["spendday"] if i['spendday'] else None
+
             Issue(assignee=i["assignee"],
-                  task_id=i["task_id"],
-                  link=i["link"],
+                  task_id=i["key"],
+                  link="{}/browse/{}".format(config.JIRA_URL, i["task_id"]),
                   summary=i["summary"],
                   category=i["category"],
                   type=i["type"],
                   level=i["level"],
-                  due_date=i["duedate"],
-                  start_date=i["startdate"],
-                  finish_date=i["finishdate"],
-                  rate=i["rate"],
-                  spend_day=i["spendday"],
+                  due_date=self.__parse_datetime(i["duedate"]),
+                  start_date=self.__parse_datetime(i["startdate"]),
+                  finish_date=self.__parse_datetime(i["finishdate"]),
+                  rate=i["rate"] if i['rate'] else None,
+                  spend_day=i["spendday"] if i['spendday'] else None,
                   status=i["status"],
-                  deadline_rate=i["deadline_rate"])
+                  deadline_rate=self.deadline_rate(duedate, status, finishdate, startdate, spendday))
             list_issue.append(dict(Issue))
         return list_issue
 
     def getIssue(self):
-        self.data["list_issue"] = self.covertdata(self.data["{}".format(self.username)]["assign_issue"])
-        self.data["support_issue"] = self.covertdata(self.data["{}".format(self.username)]["support_issue"])
+        self.data["assign_issue"] = self.covertdata(self.data["assign_issue"])
+        self.data["support_issue"] = self.covertdata(self.data["support_issue"])
         return self.data
 
 
@@ -197,7 +202,6 @@ class tb_totalPoint():
         for username in self.list_username():
 
             issue = GetIssue(username=username, month=self.month).getIssue()
-            print('issueeee',issue)
 
             m = dict(
                 Cal_Score(username=username, month=self.month).total_point(issue["assign_issue"], issue["support"]))
@@ -218,8 +222,3 @@ class tb_totalPoint():
 
     def list_username(self) -> list:
         return list(constant.MEMBERS.keys())
-if __name__ == "__main__":
-    aaa = tb_totalPoint("2022-09").all()
-    print(aaa)
-
-
