@@ -1,4 +1,4 @@
-from adapter.api import create_app
+from API.api import create_app
 from core import config
 
 

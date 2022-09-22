@@ -1,5 +1,4 @@
-from Jira_save import save_data
-from flask import Flask
+
 from celery import Celery
 appcelery = Celery('savedata', backend='rpc://', broker='amqp://guest@localhost//')
 appcelery.conf.timezone = 'UTC'

@@ -1,84 +1,14 @@
-# from core.domain.model import Member, Score
 from repositories import constant
-from datetime import datetime
-from core.domain.model import (Issue, Score, Member)
-import json
-from jira.resources import Issue
-from core import config
-import os
+from core.domain.model import (Score)
 
-class GetIssue(Member):
-    def __init__(self, username: str, month: str = None) -> None:
-        super().__init__(username, month)
-        curDT = datetime.now()
-        path = r'../repositories/'
 
-        if not month:
-            namefile = curDT.strftime("%Y_%m")
-        else:
-            _year, _month = month.split("-")
-            namefile = _year + '_' + _month
-        # os.chdir(r'C:\Folder')
-        f = open(r"/home/thoa/PycharmProjects/scoring_hexagon/repositories/2022_09.json", "r")
-        self.data = json.load(f)
+class GetIssue():
+    def __init__(self, username: str, data) -> None:
+        self.username = username
+        self.data = data
         print("data", self.data)
-
-    def __parse_datetime(self, date) -> datetime:
-        try:
-            return datetime.strptime(date, constant.PATTERN_DATETIME)
-        except:
-            return None
-
-    def deadline_rate(self, duedate, status, finishdate, startdate, spendday) -> str:
-        if duedate and duedate < datetime.now() and status != constant.STATUS_DONE:
-            return 'late'
-
-        if not finishdate or not startdate:
-            return 'fail'
-
-        if spendday:
-            # +1 do tính cùng ngày là 1 ngày
-            date_delta = (finishdate - startdate).days \
-                         + 1 - spendday
-
-            if date_delta == 0:
-                return 'pass'
-            elif date_delta > 0:
-                return 'late'
-            else:
-                return 'early'
-        else:
-            if finishdate == duedate:
-                return 'pass'
-            elif finishdate > duedate:
-                return 'late'
-            else:
-                return 'early'
-
-    def covertdata(self, issue):
-        list_issue = []
-        for i in issue:
-            Issue(assignee=i["assignee"],
-                  task_id=i["task_id"],
-                  link=i["link"],
-                  summary=i["summary"],
-                  category=i["category"],
-                  type=i["type"],
-                  level=i["level"],
-                  due_date=i["duedate"],
-                  start_date=i["startdate"],
-                  finish_date=i["finishdate"],
-                  rate=i["rate"],
-                  spend_day=i["spendday"],
-                  status=i["status"],
-                  deadline_rate=i["deadline_rate"])
-            list_issue.append(dict(Issue))
-        return list_issue
-
     def getIssue(self):
-        self.data["list_issue"] = self.covertdata(self.data["{}".format(self.username)]["assign_issue"])
-        self.data["support_issue"] = self.covertdata(self.data["{}".format(self.username)]["support_issue"])
-        return self.data
+        return self.data["{}".format(self.username)]
 
 
 class IssueCalculator(object):
@@ -86,29 +16,32 @@ class IssueCalculator(object):
         super().__init__()
         self.issue = issue
 
-    def calc_issue(self, issue: dict) -> dict:
+    def calc_issue(self) -> dict:
         rank_str = "lateOrNotDoneOrNone"
+        print("status", self.issue["status"], constant.STATUS_DONE)
+        if self.issue["status"] == constant.STATUS_DONE:
+            rank_str = "{}{}".format(self.issue["deadline_rate"], self.issue["rate"])
 
-        if issue["status"] == constant.STATUS_DONE:
-            rank_str = "{}{}".format(issue["deadline_rate"], issue["rate"])
-            issue["rank"] = constant.RANKS.get(rank_str, 'E')
+            self.issue["rank"] = constant.RANKS.get(rank_str, 'E')
         else:
-            issue["rank"] = "E"
+            self.issue["rank"] = "E"
 
-        point_str = "{}{}{}".format(issue["type"], issue["level"], issue["rank"])
-        issue["point"] = constant.POINTS.get(point_str, 0)
-        issue["rank_str"] = rank_str
-        issue["point_str"] = point_str
+        point_str = "{}{}{}".format(self.issue["type"], self.issue["level"], self.issue["rank"])
+        print("point_str", point_str)
+        self.issue["point"] = constant.POINTS.get(point_str, 0)
+        self.issue["rank_str"] = rank_str
+        self.issue["point_str"] = point_str
 
-        return issue
+        return self.issue
 
     def calc_support_issue(self, issue: dict) -> dict:
         pass
 
 
-class Cal_Score(Member):
+class Cal_Score():
     def __init__(self, username: str, month: str):
-        super().__init__(username, month)
+        self.username = username
+        self.month = month
         self.quota = constant.MEMBERS[self.username]
 
     def salary_bonus(self, point: float) -> int:
@@ -133,11 +66,13 @@ class Cal_Score(Member):
         return release_bonus_percent
 
     def support_bonus_percent(self, support_issues):
+        print("support_issues", support_issues)
         total_support_issues_point = 0
         tt_sp_persent = 0
         for support_issue in support_issues:
             s_issue = IssueCalculator(support_issue)
-            calcul_support_issue = s_issue.calc_issue(support_issue)
+            calcul_support_issue = s_issue.calc_issue()
+            print("calcul_support_issue['point']", calcul_support_issue['point'])
             if calcul_support_issue['point'] > 0:
                 earned = calcul_support_issue['point'] * constant.SUPPORT_RATE
                 total_support_issues_point += earned
@@ -158,12 +93,14 @@ class Cal_Score(Member):
         return improvement_bonus_percent
 
     def performance_point(self, assigned_issue):
-        performance_point = 0
+        print("assigned_issue____", len(assigned_issue), assigned_issue)
+        performancepoint = 0
         for i in assigned_issue:
-            a_issue = IssueCalculator(i)
-            percent = a_issue["point"] * 0.7 * 100 / self.quota
-            performance_point += percent
-        return performance_point
+            a_issue = IssueCalculator(i).calc_issue()
+            percent = a_issue["point"] * 0.7 * 100.0 / self.quota
+            performancepoint += percent
+        print("performancepoint", performancepoint)
+        return performancepoint
 
     def total_point(self, assigned_issue, support_issues):
         rl_point = self.Release_point()
@@ -174,6 +111,15 @@ class Cal_Score(Member):
         Performance_p = self.performance_point(assigned_issue)
         total = round(Monthly_bonus_point + Train_percent + Im_point + Performance_p, 2)
         salary_bonus = self.salary_bonus(total)
+        print("aaaaaaaaaa", Score(performance_point=Performance_p,
+                                  improvement_bonus_percent=Im_point,
+                                  training_bonus_percent=Train_percent,
+                                  monthly_bonus_point=Monthly_bonus_point,
+                                  support_bonus_percent=Sp_bonus_percent,
+                                  release_bonus_percent=rl_point,
+                                  total=total,
+                                  salary_bonus=salary_bonus
+                                  ))
         return Score(performance_point=Performance_p,
                      improvement_bonus_percent=Im_point,
                      training_bonus_percent=Train_percent,
@@ -185,22 +131,24 @@ class Cal_Score(Member):
                      )
 
 
-class tb_totalPoint():
+class GettableScore():
 
-    def __init__(self, month: str = None) -> None:
+    def __init__(self, data, month: str = None) -> None:
         super().__init__()
         self.month = month
+        self.data = data
 
     def all(self, sort: bool = True, short: bool = False) -> dict:
         re = {}
 
         for username in self.list_username():
 
-            issue = GetIssue(username=username, month=self.month).getIssue()
-            print('issueeee',issue)
+
+            issue = self.data["{}".format(username)]
 
             m = dict(
-                Cal_Score(username=username, month=self.month).total_point(issue["assign_issue"], issue["support"]))
+                Cal_Score(username=username, month=self.month).total_point(issue["list_issue"],
+                                                                           issue["list_support_issue"]))
 
             if short:
 
@@ -218,8 +166,8 @@ class tb_totalPoint():
 
     def list_username(self) -> list:
         return list(constant.MEMBERS.keys())
-if __name__ == "__main__":
-    aaa = tb_totalPoint("2022-09").all()
-    print(aaa)
 
 
+# if __name__ == "__main__":
+#     aaa = GettableScore("2022-09").all()
+#     print(aaa)

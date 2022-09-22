@@ -1,7 +1,7 @@
 from datetime import datetime
 from pydantic import BaseModel
 from typing import List, Optional
-from flask_pydantic import validate
+# from flask_pydantic import validate
 
 
 class Issue(BaseModel):
@@ -36,24 +36,3 @@ class Member:
     def __init__(self, username: str, month: str = None):
         self.username = username
         self.month = month
-        # self.start_str = None
-        # self.end_str = None
-        # self.time_query_str()
-
-    # def time_query_str(self):
-    #
-    #     start_date = 16
-    #     end_date = 15
-    #
-    #     if not self.month:
-    #         now = datetime.now()
-    #         _year, _month = now.year, now.month
-    #     else:
-    #         _year, _month = self.month.split("-")
-    #
-    #     self.start_str = "{}-{}-{}".format(
-    #         _year, int(_month) - 1, start_date
-    #     )
-    #     self.end_str = "{}-{}-{}".format(
-    #         _year, int(_month), end_date
-    #     )

@@ -5,7 +5,8 @@ from flask import Flask, request, redirect, g
 # from core. import ScoreTable, Member
 from repositories.constant import PATERN_MONTH
 from sentry_sdk.integrations.flask import FlaskIntegration
-from core.services import services
+# from core.services import services
+from adapter import adapter
 
 
 def create_app(config_object=None):
@@ -30,7 +31,10 @@ def create_app(config_object=None):
 
     @app.route("/")
     def home():
-        table = services.tb_totalPoint(month=g.month).all(short=True, )
+        print("g.month",g.month)
+        table = adapter.Get_tableScoreAdapter(Month=g.month, short=True).getTb()
+
+        # table = services.GettableScore(month=g.month).all(short=True,)
 
         now = datetime.now()
         year = now.year
@@ -46,13 +50,14 @@ def create_app(config_object=None):
 
     @app.route("/members/<username>")
     def member(username):
-        table = services.GetIssue(username, month=g.month).getIssue()
-        table["username"] = username
+        table = adapter.GetIssue_Addapter(username,g.month).getissueAdapter()
+        # table =
+        # table["username"] = username
         return table
 
     @app.route("/reportxxx")
     def report():
-        table = services.tb_totalPoint(month=g.month).all(short=True, )
+        table = adapter.Get_tableScoreAdapter(Month=g.month, short=True).getTb()
         return table
 
     return app

@@ -6,6 +6,8 @@ from datetime import datetime
 import time
 from celery import Celery
 import json
+
+from celery import Celery
 appcelery = Celery('savedata', backend='rpc://', broker='amqp://guest@localhost//')
 appcelery.conf.timezone = 'UTC'
 
@@ -13,16 +15,14 @@ appcelery.conf.timezone = 'UTC'
 @appcelery.on_after_configure.connect
 def setup_periodic_tasks(sender, **kwargs):
     # Calls test('hello') every 10 seconds.
-    sender.add_periodic_task(30.0, save_data.save_issue.s(), name='add every 10')
+    sender.add_periodic_task(60.0, test.s('2022-09'), name='add every 10')
 
     # Calls test('world') every 30 seconds
-    # sender.add_periodic_task(30.0, save_data.save_issue.s(), expires=10)
-
-
+    # sender.add_periodic_task(30.0, test.s('world'), expires=10)
+@appcelery.task
 def test(arg):
-    for i in range(1000):
-        print(str(i) + arg)
 
+    save_data(str(arg))
 
 class BFIssue(Issue):
     def __reinit__(self) -> None:
@@ -32,6 +32,7 @@ class BFIssue(Issue):
         self.type = self.fields.customfield_10304.value if self.fields.customfield_10304 else None
         self.category = self.fields.customfield_10303.value if self.fields.customfield_10303 else None
         self.level = self.fields.customfield_10226.value if self.fields.customfield_10226 else None
+        print("self.fields.duedate",self.fields.duedate)
         self.duedate = self.__parse_datetime(self.fields.duedate)
         self.startdate = self.__parse_datetime(self.fields.customfield_10209)
         self.finishdate = self.__parse_datetime(self.fields.customfield_10210)
@@ -52,9 +53,9 @@ class BFIssue(Issue):
             "type": self.type,
             "category": self.category,
             "level": self.level,
-            "duedate": self.duedate,
-            "startdate": self.startdate,
-            "finishdate": self.finishdate,
+            "duedate": str(self.duedate),
+            "startdate": str(self.startdate),
+            "finishdate": str(self.finishdate),
             "rate": self.rate,
             "spend_day": self.spend_day,
             "status": self.status,
@@ -62,13 +63,14 @@ class BFIssue(Issue):
         }
 
     def __parse_datetime(self, date) -> datetime:
+        # print("date",date,datetime.strptime(date, "%Y-%m-%d"))
         try:
-            return datetime.strptime(date, self.PATTERN_DATETIME)
+            return datetime.strptime(date, "%Y-%m-%d")
         except:
             return None
 
     def deadline_rate(self) -> str:
-        if self.duedate and self.duedate < datetime.now() and self.status != self.STATUS_DONE:
+        if self.duedate and self.duedate < datetime.now() and self.status != "Done":
             return 'late'
 
         if not self.finishdate or not self.startdate:
@@ -145,7 +147,6 @@ class save_data():
         self.username = ''
         self.save_issue()
 
-
     def __query_isjsues(self, jql_str: str) -> list:
         return self.J.search_issues(jql_str=jql_str)
 
@@ -168,7 +169,7 @@ class save_data():
     def save_issue(self):
         print("aaaaaaaa")
         curDT = datetime.now()
-        path = r'../repositories/'
+        path = r'/home/thoa/PycharmProjects/scoring_hexagon/repositories/'
         namefile = curDT.strftime("%Y_%m")
         f = open(path + namefile + ".json", "w")
         data_save = {}
@@ -192,10 +193,10 @@ class save_data():
             print(self.username, data_save["{}".format(self.username)])
             json_object = json.dumps(data_save)
 
-
         print("data_save", str(data_save))
         f.writelines(json_object)
 
 
 if __name__ == "__main__":
-    save_data('2022-09')
+    save_data('2022-9')
+
